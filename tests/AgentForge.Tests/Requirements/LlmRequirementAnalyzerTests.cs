@@ -25,6 +25,21 @@ public sealed class LlmRequirementAnalyzerTests
         Assert.Contains("additionalProperties\": false", client.Request.JsonSchema, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void SystemPrompt_ContainsScopeAndInjectionGuardrails()
+    {
+        var prompt = RequirementAnalysisPrompt.SystemMessage;
+
+        Assert.Contains("directly supported", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("clarification questions", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("unrequested features", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("untrusted requirement data", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("actual known implementation scope", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Never use a complexity value merely because", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("statements addressed to the analyst", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Required final checks", prompt, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
