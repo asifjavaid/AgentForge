@@ -1,6 +1,6 @@
 # AgentForge architecture
 
-Assessment 02 preserves the original layered dependency direction while adding an LLM provider behind an Application port.
+Assessment 03 preserves the layered dependency direction while selecting between two LLM providers behind the existing Application port.
 
 ```text
 API
@@ -15,7 +15,8 @@ Domain         LlmRequirementAnalyzer
              IStructuredOutputClient
                        ^
                        |
-Infrastructure -> OpenAI Provider -> OpenAI API
+Infrastructure -> OpenAI Provider --------> OpenAI API
+               -> Azure Foundry Provider -> Foundry endpoint
 ```
 
 Project references remain:
@@ -31,7 +32,7 @@ AgentForge.Infrastructure -> AgentForge.Application -> AgentForge.Domain
 
 ### API
 
-The API is the composition root. It selects `LlmRequirementAnalyzer` for `IRequirementAnalyzer`, selects the OpenAI implementation for `IStructuredOutputClient`, binds configuration, validates HTTP input, and maps normalized LLM failures to sanitized Problem Details responses.
+The API is the composition root. It selects `LlmRequirementAnalyzer` for `IRequirementAnalyzer` and chooses the OpenAI or Azure Foundry implementation of `IStructuredOutputClient` from `AI:Provider`. This is the only provider-selection switch. It also binds configuration, validates HTTP input, and maps normalized LLM failures to sanitized Problem Details responses.
 
 ### Application
 
@@ -43,14 +44,14 @@ Domain contains the stable analysis model and complexity vocabulary. It has no A
 
 ### Infrastructure
 
-Infrastructure contains all OpenAI-specific concerns: SDK calls, schema response-format configuration, typed deserialization, timeouts, provider error classification, model/token metadata, and duration logging. A future Microsoft Foundry, Azure OpenAI, Claude, or Gemini adapter can implement the same Application port without changing the controller or Domain contract.
+Infrastructure contains both provider adapters. Each owns its SDK calls, strict schema response-format configuration, typed deserialization, timeouts, error classification, and model/token/duration logging. The Foundry adapter additionally owns Entra ID authentication and endpoint/deployment configuration. A future provider can implement the same Application port without changing the controller or Domain contract.
 
 ## Structured output flow
 
 ```text
 Natural language requirement
     -> system instructions + separate user message
-    -> OpenAI model
+    -> selected OpenAI model or Foundry deployment
     -> strict JSON-schema constrained output
     -> RequirementAnalysis
 ```
@@ -59,11 +60,12 @@ Strict Structured Outputs ensure schema adherence. Standard JSON deserialization
 
 ## Security and operations
 
-- API credentials come from user secrets or environment configuration and are excluded from source control.
+- The OpenAI API key comes from user secrets or environment configuration. Foundry uses Entra ID through `DefaultAzureCredential`, so no Azure API key is stored.
 - The requirement is untrusted user content and is never interpolated into the system prompt.
 - Full requirement text is not logged by default.
 - Provider exception details are retained internally but replaced with safe public error messages.
 - Duration and token counts are recorded as structured metadata for future Application Insights export and cost analysis.
+- Foundry inference is one request per analysis, with SDK retries disabled to avoid unexpected usage.
 
 Prompt separation reduces instruction confusion but is not a complete prompt-injection defense. Stronger input/output controls and security evaluation belong to a later assessment.
 

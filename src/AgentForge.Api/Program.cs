@@ -1,8 +1,8 @@
 using System.Text.Json.Serialization;
 using AgentForge.Api.ErrorHandling;
+using AgentForge.Api.Composition;
 using AgentForge.Application.Llm;
 using AgentForge.Application.Requirements;
-using AgentForge.Infrastructure.OpenAI;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,11 +15,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<LlmExceptionHandler>();
 
-builder.Services
-    .AddOptions<OpenAIOptions>()
-    .Bind(builder.Configuration.GetSection(OpenAIOptions.SectionName));
-
-builder.Services.AddSingleton<IStructuredOutputClient, OpenAiStructuredOutputClient>();
+builder.Services.AddLlmProvider(builder.Configuration);
 builder.Services.AddScoped<IRequirementAnalyzer, LlmRequirementAnalyzer>();
 
 var app = builder.Build();

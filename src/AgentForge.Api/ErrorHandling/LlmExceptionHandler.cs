@@ -24,6 +24,8 @@ public sealed class LlmExceptionHandler(ILogger<LlmExceptionHandler> logger) : I
                 (StatusCodes.Status503ServiceUnavailable, "LLM service busy", "The requirement analysis service is temporarily busy. Try again later."),
             LlmFailureKind.Timeout =>
                 (StatusCodes.Status504GatewayTimeout, "LLM service timeout", "The requirement analysis service did not respond in time."),
+            LlmFailureKind.Unavailable =>
+                (StatusCodes.Status503ServiceUnavailable, "LLM deployment unavailable", "The configured requirement analysis model is unavailable."),
             LlmFailureKind.InvalidResponse =>
                 (StatusCodes.Status502BadGateway, "Invalid LLM response", "The requirement analysis service returned an invalid response."),
             _ =>

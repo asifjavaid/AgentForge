@@ -6,6 +6,7 @@ public enum LlmFailureKind
     Authentication,
     RateLimit,
     Timeout,
+    Unavailable,
     InvalidResponse,
     Provider
 }
