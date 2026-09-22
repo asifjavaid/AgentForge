@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AgentForge.Api.Composition;
+using AgentForge.Application.Agents;
 using AgentForge.Application.Llm;
 using AgentForge.Domain.Requirements;
 using AgentForge.Infrastructure.AzureFoundry;
@@ -20,6 +21,18 @@ public sealed class ProviderConfigurationTests
         using var scope = serviceProvider.CreateScope();
 
         var registeredClient = scope.ServiceProvider.GetRequiredService<IStructuredOutputClient>();
+
+        Assert.IsType(expectedType, registeredClient);
+    }
+
+    [Theory]
+    [InlineData("OpenAI", typeof(OpenAiToolCallingClient))]
+    [InlineData("AzureFoundry", typeof(AzureFoundryToolCallingClient))]
+    public void SelectedProvider_RegistersExpectedToolCallingClient(string provider, Type expectedType)
+    {
+        using var serviceProvider = CreateServices(provider);
+
+        var registeredClient = serviceProvider.GetRequiredService<IToolCallingClient>();
 
         Assert.IsType(expectedType, registeredClient);
     }

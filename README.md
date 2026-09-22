@@ -2,7 +2,7 @@
 
 AgentForge is a production-oriented Agentic AI software engineering platform built incrementally to explore LLM engineering, retrieval-augmented generation, tool calling, agent orchestration, evaluation, observability, and Microsoft Azure AI technologies.
 
-Assessment 03 supports OpenAI and Microsoft Foundry as selectable providers for LLM-powered structured requirement analysis. Both produce the existing strongly typed `RequirementAnalysis` contract.
+Assessment 04 adds a bounded, read-only Repository Analysis Agent while preserving the selectable OpenAI/Microsoft Foundry requirement analyzer from Assessments 02–03.
 
 ## Architecture
 
@@ -22,6 +22,19 @@ HTTP request
 - `AgentForge.Infrastructure` implements the port for OpenAI and Microsoft Foundry. Foundry uses the OpenAI-compatible .NET SDK with Azure Identity.
 - `AgentForge.Api` owns HTTP validation, configuration-based provider selection, dependency injection, Problem Details, JSON serialization, and Swagger.
 - `AgentForge.Tests` uses fakes and makes no paid API calls.
+
+Repository analysis follows a separate provider-neutral path:
+
+```text
+POST /api/repositories/analyze
+    -> RepositoryAnalysisAgent (bounded loop)
+    -> IToolCallingClient (OpenAI or Foundry)
+    -> RepositoryToolDispatcher
+    -> list_files / read_file / search_code
+    -> strict RepositoryAnalysis result
+```
+
+The model proposes tool calls; the application validates and authorizes them. No write, shell, Git, network, or deployment tool is registered.
 
 `DeterministicRequirementAnalyzer` remains available for isolated tests and local scenarios, but `LlmRequirementAnalyzer` is the configured API execution path.
 
@@ -98,6 +111,31 @@ dotnet run --project src/AgentForge.Api
 
 Open `/swagger` on the application URL shown in the terminal to test the endpoint interactively.
 
+### Repository analysis configuration
+
+Configure an explicit filesystem root before using repository analysis. Repositories may be addressed by a path beneath this root; canonical paths, link targets, and every tool path are checked again by the application.
+
+```powershell
+$env:RepositoryAnalysis__AllowedRoot = "C:\AgentForge\Repositories"
+$env:Agent__MaxIterations = "10"
+$env:Agent__TimeoutSeconds = "120"
+dotnet run --project src/AgentForge.Api
+```
+
+Example request:
+
+```http
+POST /api/repositories/analyze
+Content-Type: application/json
+
+{
+  "repositoryPath": "SampleApp",
+  "request": "Analyze the authentication architecture and identify supported security concerns."
+}
+```
+
+The default controls bound the loop, file reads, directory listings, searches, scanned files, and tool-result characters. `.git`, `bin`, `obj`, `node_modules`, `dist`, and `build` are skipped during recursive discovery. Obvious sensitive files such as `.env`, `.env.*`, private keys, and certificate bundles cannot be read. This is defense in depth, not a replacement for repository hygiene.
+
 Automated tests do not need an API key or Azure sign-in and never make provider network calls:
 
 ```powershell
@@ -158,3 +196,5 @@ Successful provider operations log only:
 Failures log the model, duration, and normalized failure category. API keys, authorization headers, and full user requirements are not logged. These structured log fields can later be exported to Application Insights.
 
 See [Assessment 03 evaluation](docs/assessment-03-evaluation.md) for live verification status and the P1–P4 comparison.
+
+See [Assessment 04 evaluation](docs/assessment-04-evaluation.md) for R1–R5 outputs, tool traces, security evaluation, and the learning report.

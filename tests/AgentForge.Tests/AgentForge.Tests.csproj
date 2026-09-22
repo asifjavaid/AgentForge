@@ -23,6 +23,11 @@
     <ProjectReference Include="..\..\src\AgentForge.Api\AgentForge.Api.csproj" />
     <ProjectReference Include="..\..\src\AgentForge.Application\AgentForge.Application.csproj" />
     <ProjectReference Include="..\..\src\AgentForge.Domain\AgentForge.Domain.csproj" />
+    <ProjectReference Include="..\..\src\AgentForge.Infrastructure\AgentForge.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

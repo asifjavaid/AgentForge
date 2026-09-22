@@ -3,6 +3,7 @@
 **/obj/
 .env
 .env.*
+!tests/AgentForge.Tests/Fixtures/SafeRepository/.env
 *.user
 secrets.json
 appsettings.*.local.json

@@ -14,8 +14,10 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<LlmExceptionHandler>();
+builder.Services.AddExceptionHandler<AgentExceptionHandler>();
 
 builder.Services.AddLlmProvider(builder.Configuration);
+builder.Services.AddRepositoryAnalysis(builder.Configuration);
 builder.Services.AddScoped<IRequirementAnalyzer, LlmRequirementAnalyzer>();
 
 var app = builder.Build();
