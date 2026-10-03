@@ -19,17 +19,17 @@ public sealed class LlmExceptionHandler(ILogger<LlmExceptionHandler> logger) : I
         var (statusCode, title, detail) = llmException.FailureKind switch
         {
             LlmFailureKind.Configuration or LlmFailureKind.Authentication =>
-                (StatusCodes.Status503ServiceUnavailable, "LLM service unavailable", "The requirement analysis service is not configured or available."),
+                (StatusCodes.Status503ServiceUnavailable, "LLM service unavailable", "The AI service is not configured or available."),
             LlmFailureKind.RateLimit =>
-                (StatusCodes.Status503ServiceUnavailable, "LLM service busy", "The requirement analysis service is temporarily busy. Try again later."),
+                (StatusCodes.Status503ServiceUnavailable, "LLM service busy", "The AI service is temporarily busy. Try again later."),
             LlmFailureKind.Timeout =>
-                (StatusCodes.Status504GatewayTimeout, "LLM service timeout", "The requirement analysis service did not respond in time."),
+                (StatusCodes.Status504GatewayTimeout, "LLM service timeout", "The AI service did not respond in time."),
             LlmFailureKind.Unavailable =>
-                (StatusCodes.Status503ServiceUnavailable, "LLM deployment unavailable", "The configured requirement analysis model is unavailable."),
+                (StatusCodes.Status503ServiceUnavailable, "LLM deployment unavailable", "The configured AI model is unavailable."),
             LlmFailureKind.InvalidResponse =>
-                (StatusCodes.Status502BadGateway, "Invalid LLM response", "The requirement analysis service returned an invalid response."),
+                (StatusCodes.Status502BadGateway, "Invalid LLM response", "The AI service returned an invalid response."),
             _ =>
-                (StatusCodes.Status502BadGateway, "LLM provider failure", "The requirement analysis service could not complete the request.")
+                (StatusCodes.Status502BadGateway, "LLM provider failure", "The AI service could not complete the request.")
         };
 
         logger.LogWarning(

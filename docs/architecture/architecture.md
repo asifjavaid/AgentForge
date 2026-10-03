@@ -1,6 +1,6 @@
 # AgentForge architecture
 
-Assessment 04 preserves the layered dependency direction while adding a separate bounded repository-analysis agent beside the existing requirement analyzer.
+Assessment 05A preserves the layered dependency direction while adding deterministic retrieval-augmented generation beside the existing requirement analyzer and repository agent.
 
 ```text
 API
@@ -25,6 +25,12 @@ IRepositoryToolDispatcher -> list_files / read_file / search_code
           |
           v
 canonical repository boundary + deterministic limits
+
+KnowledgeService -> IKnowledgeDocumentLoader -> Markdown/text corpus
+       |          -> IKnowledgeChunker -> character chunks
+       |          -> IEmbeddingClient -> selected provider
+       |          -> IKnowledgeVectorStore -> explicit cosine + Top-K
+       `----------> IGroundedGenerationClient -> selected provider
 ```
 
 Project references remain:
@@ -40,19 +46,38 @@ AgentForge.Infrastructure -> AgentForge.Application -> AgentForge.Domain
 
 ### API
 
-The API is the composition root. It selects `LlmRequirementAnalyzer` for `IRequirementAnalyzer` and chooses both the structured-output and tool-calling provider adapters from `AI:Provider`. This remains the only provider-selection switch. It binds repository limits, registers only the three read-only tools, validates HTTP input, and maps failures to sanitized Problem Details responses.
+The API is the composition root. It selects `LlmRequirementAnalyzer` for `IRequirementAnalyzer` and chooses structured-output, tool-calling, embedding, and grounded-generation provider adapters from `AI:Provider`. This remains the only provider-selection switch. It binds repository and RAG limits, validates HTTP input, and maps provider failures to sanitized Problem Details responses.
 
 ### Application
 
-Application owns both use cases. Requirement analysis continues through `IStructuredOutputClient`. Repository analysis uses the provider-neutral `IToolCallingClient`, owns the bounded loop, carries assistant tool calls and tool results across turns, and produces the strict `RepositoryAnalysis` contract. Provider SDK types do not cross this boundary.
+Application owns the use cases. Requirement analysis continues through `IStructuredOutputClient`. Repository analysis uses the provider-neutral `IToolCallingClient`, owns the bounded loop, carries assistant tool calls and tool results across turns, and produces the strict `RepositoryAnalysis` contract.
+
+Knowledge retrieval is separate from the tool-calling agent. `KnowledgeService` indexes the corpus once per application lifetime, creates a query embedding, performs deterministic thresholded Top-K retrieval, and sends only selected chunks to grounded generation. It validates every returned citation against the retrieved source identifiers. Provider SDK types do not cross the Application boundary.
 
 ### Domain
 
-Domain contains the stable requirement and repository analysis models. It has no API, Infrastructure, or provider SDK dependencies.
+Domain contains stable requirement, repository-analysis, document/chunk, retrieval, answer, source, and diagnostic models. It has no API, Infrastructure, or provider SDK dependencies. Chunk embeddings are retained for local search but excluded from JSON serialization.
 
 ### Infrastructure
 
-Infrastructure contains both provider adapters and the filesystem tool implementations. Provider adapters translate application-owned messages, strict function schemas, assistant tool calls, tool results, and final response schemas into SDK types. Filesystem infrastructure canonicalizes every requested path, checks link targets, rejects sensitive/unsupported files, skips generated directories, and applies bounded reads/searches/listings. The dispatcher maps exact registered names to implementations; it never reflects over arbitrary model strings.
+Infrastructure contains provider adapters, filesystem tools, and knowledge document loading. Provider adapters translate application-owned contracts into SDK types. Filesystem infrastructure canonicalizes every requested path, checks link targets, rejects sensitive/unsupported files, skips generated directories, and applies bounded reads/searches/listings. The dispatcher maps exact registered names to implementations; it never reflects over arbitrary model strings.
+
+Knowledge infrastructure loads bounded UTF-8 Markdown/text documents and implements provider adapters for embeddings and grounded chat. Foundry chat can use the project endpoint while embeddings can optionally use a distinct resource endpoint. Both use Entra ID and `DefaultAzureCredential`; no Azure API key is introduced.
+
+## RAG flow
+
+```text
+first-question ingestion (once per application lifecycle)
+  load -> validate size/format -> chunk -> batch embed -> in-memory store
+
+each question
+  embed -> cosine score every chunk -> minimum threshold -> Top-K
+  -> no matches: deterministic insufficient-evidence response
+  -> matches: system instructions + separate question + delimited untrusted context
+  -> strict answer/citation JSON -> citation allow-list validation -> API response
+```
+
+The character chunker defaults to 900 characters with 150 characters of overlap and prefers paragraph boundaries. The vector store deliberately uses a linear scan and an explicit dot-product/norm cosine calculation. This keeps ingestion, scoring, thresholding, and ranking visible for learning; token-aware chunking, persistence, and approximate nearest-neighbor indexing are deferred.
 
 ## Repository agent loop
 
@@ -97,8 +122,9 @@ Prompt instructions guide behavior, but authorization is deterministic: exact re
 
 ```text
 Structured Output
-    -> Tool Calling + read-only Repository Intelligence (current)
-    -> RAG
+    -> Tool Calling + read-only Repository Intelligence
+    -> Local RAG fundamentals (current)
+    -> Azure AI Search / production retrieval
     -> Agents
     -> Multi-Agent Orchestration
     -> MCP

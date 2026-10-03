@@ -10,14 +10,26 @@ public sealed class AzureFoundryOptions
 
     public string? DeploymentName { get; init; }
 
+    public string EmbeddingDeploymentName { get; init; } = "text-embedding-3-small";
+
+    public string? EmbeddingEndpoint { get; init; }
+
     public string? TenantId { get; init; }
 
     public int TimeoutSeconds { get; init; } = 60;
 
     public Uri GetChatEndpoint()
+        => NormalizeEndpoint(Endpoint, "Azure Foundry endpoint configuration is invalid.");
+
+    public Uri GetEmbeddingEndpoint()
+        => NormalizeEndpoint(
+            string.IsNullOrWhiteSpace(EmbeddingEndpoint) ? Endpoint : EmbeddingEndpoint,
+            "Azure Foundry embedding endpoint configuration is invalid.");
+
+    private static Uri NormalizeEndpoint(string? configuredEndpoint, string errorMessage)
     {
-        if (string.IsNullOrWhiteSpace(Endpoint) ||
-            !Uri.TryCreate(Endpoint.Trim(), UriKind.Absolute, out var endpoint) ||
+        if (string.IsNullOrWhiteSpace(configuredEndpoint) ||
+            !Uri.TryCreate(configuredEndpoint.Trim(), UriKind.Absolute, out var endpoint) ||
             endpoint.Scheme != Uri.UriSchemeHttps ||
             endpoint.Host.Length == 0 ||
             endpoint.UserInfo.Length != 0 ||
@@ -26,7 +38,7 @@ public sealed class AzureFoundryOptions
         {
             throw new LlmOperationException(
                 LlmFailureKind.Configuration,
-                "Azure Foundry endpoint configuration is invalid.");
+                errorMessage);
         }
 
         var baseAddress = endpoint.AbsoluteUri.TrimEnd('/');
@@ -48,6 +60,13 @@ public sealed class AzureFoundryOptions
         }
 
         return DeploymentName.Trim();
+    }
+
+    public string GetEmbeddingDeploymentName()
+    {
+        if (string.IsNullOrWhiteSpace(EmbeddingDeploymentName))
+            throw new LlmOperationException(LlmFailureKind.Configuration, "Azure Foundry embedding deployment configuration is missing.");
+        return EmbeddingDeploymentName.Trim();
     }
 
     public string? GetTenantId()

@@ -18,6 +18,7 @@ builder.Services.AddExceptionHandler<AgentExceptionHandler>();
 
 builder.Services.AddLlmProvider(builder.Configuration);
 builder.Services.AddRepositoryAnalysis(builder.Configuration);
+builder.Services.AddKnowledge(builder.Configuration, builder.Environment);
 builder.Services.AddScoped<IRequirementAnalyzer, LlmRequirementAnalyzer>();
 
 var app = builder.Build();

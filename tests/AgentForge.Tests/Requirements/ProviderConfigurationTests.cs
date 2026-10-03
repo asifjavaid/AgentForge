@@ -2,6 +2,7 @@ using System.Text.Json;
 using AgentForge.Api.Composition;
 using AgentForge.Application.Agents;
 using AgentForge.Application.Llm;
+using AgentForge.Application.Knowledge;
 using AgentForge.Domain.Requirements;
 using AgentForge.Infrastructure.AzureFoundry;
 using AgentForge.Infrastructure.OpenAI;
@@ -38,6 +39,16 @@ public sealed class ProviderConfigurationTests
     }
 
     [Theory]
+    [InlineData("OpenAI", typeof(OpenAiEmbeddingClient), typeof(OpenAiGroundedGenerationClient))]
+    [InlineData("AzureFoundry", typeof(AzureFoundryEmbeddingClient), typeof(AzureFoundryGroundedGenerationClient))]
+    public void SelectedProvider_RegistersExpectedRagClients(string provider, Type embeddingType, Type generationType)
+    {
+        using var serviceProvider = CreateServices(provider);
+        Assert.IsType(embeddingType, serviceProvider.GetRequiredService<IEmbeddingClient>());
+        Assert.IsType(generationType, serviceProvider.GetRequiredService<IGroundedGenerationClient>());
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("UnknownProvider")]
     public void MissingOrUnknownProvider_FailsAtComposition(string provider)
@@ -64,6 +75,18 @@ public sealed class ProviderConfigurationTests
 
         Assert.Equal(expected, options.GetChatEndpoint().AbsoluteUri);
         Assert.Equal("agentforge-gpt5-mini", options.GetDeploymentName());
+    }
+
+    [Fact]
+    public void FoundryOptions_CanUseSeparateEmbeddingEndpoint()
+    {
+        var options = new AzureFoundryOptions
+        {
+            Endpoint = "https://example.services.ai.azure.com/api/projects/project",
+            EmbeddingEndpoint = "https://example.cognitiveservices.azure.com"
+        };
+
+        Assert.Equal("https://example.cognitiveservices.azure.com/openai/v1/", options.GetEmbeddingEndpoint().AbsoluteUri);
     }
 
     [Theory]

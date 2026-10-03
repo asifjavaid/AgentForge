@@ -1,5 +1,6 @@
 using AgentForge.Application.Agents;
 using AgentForge.Application.Llm;
+using AgentForge.Application.Knowledge;
 using AgentForge.Infrastructure.AzureFoundry;
 using AgentForge.Infrastructure.OpenAI;
 
@@ -23,10 +24,14 @@ public static class LlmProviderRegistration
             case "OpenAI":
                 services.AddSingleton<IStructuredOutputClient, OpenAiStructuredOutputClient>();
                 services.AddSingleton<IToolCallingClient, OpenAiToolCallingClient>();
+                services.AddSingleton<IEmbeddingClient, OpenAiEmbeddingClient>();
+                services.AddSingleton<IGroundedGenerationClient, OpenAiGroundedGenerationClient>();
                 break;
             case "AzureFoundry":
                 services.AddSingleton<IStructuredOutputClient, AzureFoundryStructuredOutputClient>();
                 services.AddSingleton<IToolCallingClient, AzureFoundryToolCallingClient>();
+                services.AddSingleton<IEmbeddingClient, AzureFoundryEmbeddingClient>();
+                services.AddSingleton<IGroundedGenerationClient, AzureFoundryGroundedGenerationClient>();
                 break;
             default:
                 throw new InvalidOperationException(

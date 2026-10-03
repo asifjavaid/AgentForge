@@ -2,7 +2,7 @@
 
 AgentForge is a production-oriented Agentic AI software engineering platform built incrementally to explore LLM engineering, retrieval-augmented generation, tool calling, agent orchestration, evaluation, observability, and Microsoft Azure AI technologies.
 
-Assessment 04 adds a bounded, read-only Repository Analysis Agent while preserving the selectable OpenAI/Microsoft Foundry requirement analyzer from Assessments 02–03.
+Assessment 05A adds an explicit local RAG pipeline for software knowledge while preserving the requirement analyzer and bounded, read-only Repository Analysis Agent from Assessments 01–04.
 
 ## Architecture
 
@@ -35,6 +35,16 @@ POST /api/repositories/analyze
 ```
 
 The model proposes tool calls; the application validates and authorizes them. No write, shell, Git, network, or deployment tool is registered.
+
+Software knowledge follows a deterministic retrieval path rather than a tool-calling loop:
+
+```text
+Markdown/text documents -> character chunks -> embeddings -> in-memory vectors
+Question -> query embedding -> explicit cosine similarity -> threshold + Top-K
+         -> retrieved chunks only -> grounded generation -> validated citations
+```
+
+Character chunking defaults to 900 characters with 150 characters of overlap and prefers paragraph boundaries. Production systems commonly use token-aware chunking. Large chunks reduce retrieval precision; tiny chunks lose context; overlap protects boundary context but increases index size and duplicate results.
 
 `DeterministicRequirementAnalyzer` remains available for isolated tests and local scenarios, but `LlmRequirementAnalyzer` is the configured API execution path.
 
@@ -69,6 +79,13 @@ dotnet run --project src/AgentForge.Api
 ```
 
 Alternatively, set `$env:AzureFoundry__Endpoint` in the shell. The endpoint may be the Foundry project URL or an OpenAI-compatible resource URL; the client appends `/openai/v1` when needed. `AzureFoundry:DeploymentName` defaults to `agentforge-gpt5-mini` and is overrideable with `$env:AzureFoundry__DeploymentName`. The URL is configuration, not a bearer token or API key. Do not place secrets in `appsettings.json`.
+
+The RAG embedding deployment defaults to `text-embedding-3-small`. When embeddings are exposed through a different resource endpoint than chat, set `AzureFoundry:EmbeddingEndpoint`; otherwise it falls back to `AzureFoundry:Endpoint`:
+
+```powershell
+$env:AzureFoundry__EmbeddingEndpoint = "https://YOUR-RESOURCE.cognitiveservices.azure.com"
+$env:AzureFoundry__EmbeddingDeploymentName = "text-embedding-3-small"
+```
 
 If Azure CLI has access to multiple tenants, set the optional `AzureFoundry:TenantId` (or `$env:AzureFoundry__TenantId`) to the Foundry resource's tenant ID. A token from another tenant is rejected even when token acquisition succeeds. Do not change the machine's default Azure subscription just to run this app.
 
@@ -144,6 +161,21 @@ dotnet test AgentForge.sln --no-build
 
 ## API
 
+### Software knowledge
+
+```http
+POST /api/knowledge/ask
+Content-Type: application/json
+
+{
+  "question": "How long does a password-reset link remain valid?"
+}
+```
+
+The response contains the grounded answer, trusted source metadata, ranked retrieval scores, sufficiency decision, indexing counts, embedding dimensions, latencies, and generation token usage. It never exposes raw embedding vectors. Configure `Rag:CorpusPath`, `ChunkSize`, `ChunkOverlap`, `TopK`, `MinimumSimilarity`, `MaxDocumentBytes`, and `EmbeddingBatchSize` as needed. Similarity thresholds are embedding-model and corpus dependent and require evaluation.
+
+### Requirement analysis
+
 ```http
 POST /api/requirements/analyze
 Content-Type: application/json
@@ -198,3 +230,5 @@ Failures log the model, duration, and normalized failure category. API keys, aut
 See [Assessment 03 evaluation](docs/assessment-03-evaluation.md) for live verification status and the P1–P4 comparison.
 
 See [Assessment 04 evaluation](docs/assessment-04-evaluation.md) for R1–R5 outputs, tool traces, security evaluation, and the learning report.
+
+See [Assessment 05A evaluation](docs/assessment-05a-evaluation.md) for Q1–Q5 retrieval results, complete grounded responses, latency/token diagnostics, limitations, and the learning report.

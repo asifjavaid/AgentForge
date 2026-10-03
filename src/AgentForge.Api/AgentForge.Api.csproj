@@ -16,4 +16,8 @@
     <ProjectReference Include="..\AgentForge.Infrastructure\AgentForge.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Update="knowledge\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
