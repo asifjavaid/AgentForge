@@ -75,7 +75,7 @@ Final verification command:
 dotnet test AgentForge.sln -c Release --no-restore
 ```
 
-Result: **72 passed, 0 failed, 0 skipped**.
+Result: **73 passed, 0 failed, 0 skipped**.
 
 The suite is deterministic and makes no paid/network calls. It covers document loading, supported formats, binary-extension exclusion, oversized documents, empty documents, chunk metadata/boundaries, cosine identity/orthogonality/invalid vectors, Top-K ordering and limit, thresholding, source preservation, retrieved-only context, insufficient evidence, citation allow-listing, malicious content, one-time indexing, provider registration, the API endpoint, Swagger, and all earlier assessment tests.
 
@@ -186,6 +186,7 @@ These are independent stages:
 2. **Provider-safe errors:** grounded Foundry failures are mapped into normalized `LlmOperationException` categories instead of escaping as generic HTTP 500 errors.
 3. **Literal injection content filter:** an initially literal jailbreak phrase triggered Azure content management before the model could be evaluated. The fixture retained the same adversarial intent in clearly labelled, less trigger-prone wording. The final Q5 then passed.
 4. **Sufficiency is not retrieval presence:** generation now returns an explicit sufficiency flag. Passing a threshold does not automatically mean the evidence answers the question; citations may be empty only for insufficient evidence.
+5. **Corpus packaging:** the initial project file used `Content Update` even though the SDK evaluated the corpus files as `None`, so they were absent from build and publish output. The rule now updates the actual `None` items, and an automated test plus an isolated `dotnet publish` verification confirm all five documents are packaged under `knowledge/`.
 
 ## Files added or changed
 
