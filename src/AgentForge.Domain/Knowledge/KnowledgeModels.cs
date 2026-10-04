@@ -16,7 +16,11 @@ public sealed record KnowledgeRetrieval(
     string Source,
     string ChunkId,
     int Position,
-    double Similarity);
+    int Rank,
+    string RetrievalMode,
+    double Score,
+    double? Similarity,
+    double? RerankerScore);
 
 public sealed record KnowledgeSource(string Source, string ChunkId);
 
@@ -31,6 +35,7 @@ public sealed record KnowledgeIndexDiagnostics(
     IReadOnlyList<string> Errors);
 
 public sealed record KnowledgeAskDiagnostics(
+    string RetrievalMode,
     long QueryEmbeddingMilliseconds,
     long RetrievalMilliseconds,
     long GenerationMilliseconds,
@@ -46,3 +51,14 @@ public sealed record KnowledgeAnswer(
     IReadOnlyList<KnowledgeRetrieval> Retrieval,
     bool IsSufficientEvidence,
     KnowledgeAskDiagnostics Diagnostics);
+
+public sealed record KnowledgeIndexingResult(
+    bool IndexCreated,
+    bool SchemaValidated,
+    int DocumentsProcessed,
+    int ChunksProduced,
+    int DocumentsUpserted,
+    int EmbeddingCalls,
+    long EmbeddingDurationMilliseconds,
+    long IndexingDurationMilliseconds,
+    IReadOnlyList<string> Errors);

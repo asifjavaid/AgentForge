@@ -53,12 +53,64 @@ public interface IKnowledgeChunker
 public interface IKnowledgeVectorStore
 {
     void Replace(IReadOnlyList<KnowledgeChunk> chunks);
-    IReadOnlyList<KnowledgeSearchResult> Search(IReadOnlyList<float> query, int topK, double minimumSimilarity);
+    IReadOnlyList<KnowledgeSearchResult> Search(
+        IReadOnlyList<float> query,
+        int topK,
+        double minimumSimilarity,
+        string? source = null);
 }
 
 public sealed record KnowledgeSearchResult(KnowledgeChunk Chunk, double Similarity);
 
+public enum KnowledgeRetrieverKind
+{
+    InMemory,
+    AzureAiSearch
+}
+
+public enum KnowledgeRetrievalMode
+{
+    InMemoryVector,
+    Vector,
+    Keyword,
+    Hybrid,
+    SemanticHybrid
+}
+
+public sealed record KnowledgeRetrieverRequest(string Question, string? Source);
+
+public sealed record KnowledgeRetrieverMatch(
+    KnowledgeChunk Chunk,
+    int Rank,
+    KnowledgeRetrievalMode Mode,
+    double Score,
+    double? Similarity = null,
+    double? RerankerScore = null);
+
+public sealed record KnowledgeRetrieverResult(
+    IReadOnlyList<KnowledgeRetrieverMatch> Matches,
+    KnowledgeRetrievalMode Mode,
+    long QueryEmbeddingMilliseconds,
+    long SearchMilliseconds,
+    long TotalMilliseconds,
+    KnowledgeIndexDiagnostics Index);
+
+public interface IKnowledgeRetriever
+{
+    Task<KnowledgeRetrieverResult> RetrieveAsync(
+        KnowledgeRetrieverRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IKnowledgeIndexManager
+{
+    Task<KnowledgeIndexingResult> InitializeAndIndexAsync(CancellationToken cancellationToken = default);
+}
+
 public interface IKnowledgeService
 {
-    Task<KnowledgeAnswer> AskAsync(string question, CancellationToken cancellationToken = default);
+    Task<KnowledgeAnswer> AskAsync(
+        string question,
+        string? source = null,
+        CancellationToken cancellationToken = default);
 }

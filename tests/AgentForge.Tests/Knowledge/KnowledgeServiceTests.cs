@@ -78,9 +78,10 @@ public sealed class KnowledgeServiceTests
         CapturingGenerator generation, double minimum, string text = "Password reset links last 30 minutes.", FakeEmbeddings? embeddings = null)
     {
         var options = new RagOptions { ChunkSize = 300, ChunkOverlap = 20, TopK = 1, MinimumSimilarity = minimum };
-        return new KnowledgeService(
+        var retriever = new InMemoryKnowledgeRetriever(
             new FakeLoader(text), new DeterministicTextChunker(options), embeddings ?? new FakeEmbeddings(),
-            new InMemoryKnowledgeVectorStore(), generation, options);
+            new InMemoryKnowledgeVectorStore(), options);
+        return new KnowledgeService(retriever, generation);
     }
 
     private sealed class FakeLoader(string text) : IKnowledgeDocumentLoader

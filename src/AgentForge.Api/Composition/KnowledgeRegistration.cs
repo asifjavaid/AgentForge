@@ -1,5 +1,6 @@
 using AgentForge.Application.Knowledge;
 using AgentForge.Infrastructure.Knowledge;
+using AgentForge.Infrastructure.AzureSearch;
 
 namespace AgentForge.Api.Composition;
 
@@ -21,7 +22,8 @@ public static class KnowledgeRegistration
             TopK = configured.TopK,
             MinimumSimilarity = configured.MinimumSimilarity,
             MaxDocumentBytes = configured.MaxDocumentBytes,
-            EmbeddingBatchSize = configured.EmbeddingBatchSize
+            EmbeddingBatchSize = configured.EmbeddingBatchSize,
+            Retriever = configured.Retriever
         };
         options.Validate();
 
@@ -29,6 +31,16 @@ public static class KnowledgeRegistration
         services.AddSingleton<IKnowledgeDocumentLoader, MarkdownKnowledgeDocumentLoader>();
         services.AddSingleton<IKnowledgeChunker, DeterministicTextChunker>();
         services.AddSingleton<IKnowledgeVectorStore, InMemoryKnowledgeVectorStore>();
+        if (options.Retriever == KnowledgeRetrieverKind.InMemory)
+        {
+            services.AddSingleton<IKnowledgeRetriever, InMemoryKnowledgeRetriever>();
+        }
+        else
+        {
+            var searchOptions = configuration.GetSection(AzureAiSearchOptions.SectionName).Get<AzureAiSearchOptions>()
+                ?? new AzureAiSearchOptions();
+            services.AddAzureAiSearchKnowledge(searchOptions);
+        }
         services.AddSingleton<IKnowledgeService, KnowledgeService>();
         return services;
     }

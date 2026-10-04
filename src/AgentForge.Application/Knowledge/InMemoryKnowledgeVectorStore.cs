@@ -12,11 +12,13 @@ public sealed class InMemoryKnowledgeVectorStore : IKnowledgeVectorStore
     public IReadOnlyList<KnowledgeSearchResult> Search(
         IReadOnlyList<float> query,
         int topK,
-        double minimumSimilarity)
+        double minimumSimilarity,
+        string? source = null)
     {
         if (topK <= 0) return [];
 
         return _chunks
+            .Where(chunk => source is null || chunk.Source.Equals(source, StringComparison.OrdinalIgnoreCase))
             .Select(chunk => new KnowledgeSearchResult(chunk, CosineSimilarity(query, chunk.Embedding)))
             .Where(result => result.Similarity >= minimumSimilarity)
             .OrderByDescending(result => result.Similarity)

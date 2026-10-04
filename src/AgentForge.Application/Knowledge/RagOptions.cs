@@ -5,6 +5,7 @@ public sealed class RagOptions
     public const string SectionName = "Rag";
 
     public string CorpusPath { get; init; } = "knowledge";
+    public KnowledgeRetrieverKind Retriever { get; init; } = KnowledgeRetrieverKind.InMemory;
     public int ChunkSize { get; init; } = 900;
     public int ChunkOverlap { get; init; } = 150;
     public int TopK { get; init; } = 4;
@@ -15,6 +16,7 @@ public sealed class RagOptions
     public void Validate()
     {
         if (string.IsNullOrWhiteSpace(CorpusPath)) throw new InvalidOperationException("Rag:CorpusPath is required.");
+        if (!Enum.IsDefined(Retriever)) throw new InvalidOperationException("Rag:Retriever must be InMemory or AzureAiSearch.");
         if (ChunkSize is < 200 or > 8000) throw new InvalidOperationException("Rag:ChunkSize must be between 200 and 8000 characters.");
         if (ChunkOverlap < 0 || ChunkOverlap >= ChunkSize) throw new InvalidOperationException("Rag:ChunkOverlap must be non-negative and smaller than ChunkSize.");
         if (TopK is < 1 or > 20) throw new InvalidOperationException("Rag:TopK must be between 1 and 20.");

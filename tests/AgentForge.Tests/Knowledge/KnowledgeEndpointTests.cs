@@ -56,12 +56,15 @@ public sealed class KnowledgeEndpointTests : IClassFixture<WebApplicationFactory
 
     private sealed class FakeKnowledgeService : IKnowledgeService
     {
-        public Task<KnowledgeAnswer> AskAsync(string question, CancellationToken cancellationToken = default) =>
+        public Task<KnowledgeAnswer> AskAsync(
+            string question,
+            string? source = null,
+            CancellationToken cancellationToken = default) =>
             Task.FromResult(new KnowledgeAnswer(
                 "Thirty minutes [authentication.md#chunk-1]",
                 [new("authentication.md", "chunk-1")],
-                [new("authentication.md", "chunk-1", 0, 0.9)], true,
-                new KnowledgeAskDiagnostics(1, 1, 1, 3, 10, 5, 15,
+                [new("authentication.md", "chunk-1", 0, 1, "InMemoryVector", 0.9, 0.9, null)], true,
+                new KnowledgeAskDiagnostics("InMemoryVector", 1, 1, 1, 3, 10, 5, 15,
                     new KnowledgeIndexDiagnostics(5, 5, 1, 3, 2, 20, 2, []))));
     }
 }

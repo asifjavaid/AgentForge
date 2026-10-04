@@ -5,68 +5,57 @@ using AgentForge.Domain.Knowledge;
 namespace AgentForge.Application.Knowledge;
 
 public sealed partial class KnowledgeService(
-    IKnowledgeDocumentLoader loader,
-    IKnowledgeChunker chunker,
-    IEmbeddingClient embeddingClient,
-    IKnowledgeVectorStore vectorStore,
-    IGroundedGenerationClient generationClient,
-    RagOptions options) : IKnowledgeService
+    IKnowledgeRetriever retriever,
+    IGroundedGenerationClient generationClient) : IKnowledgeService
 {
-    private readonly SemaphoreSlim _indexLock = new(1, 1);
-    private KnowledgeIndexDiagnostics? _index;
-
-    public async Task<KnowledgeAnswer> AskAsync(string question, CancellationToken cancellationToken = default)
+    public async Task<KnowledgeAnswer> AskAsync(
+        string question,
+        string? source = null,
+        CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(question)) throw new ArgumentException("Question is required.", nameof(question));
+        if (string.IsNullOrWhiteSpace(question))
+            throw new ArgumentException("Question is required.", nameof(question));
+        source = ValidateSource(source);
+
         var overall = Stopwatch.StartNew();
-        var index = await EnsureIndexedAsync(cancellationToken);
+        var retrieved = await retriever.RetrieveAsync(
+            new KnowledgeRetrieverRequest(question.Trim(), source), cancellationToken);
+        var retrieval = retrieved.Matches.Select(ToRetrieval).ToArray();
 
-        var queryResult = await embeddingClient.EmbedAsync(question.Trim(), cancellationToken);
-        var queryVector = queryResult.Embeddings.Single().Values;
-
-        var retrievalTimer = Stopwatch.StartNew();
-        var matches = vectorStore.Search(queryVector, options.TopK, options.MinimumSimilarity);
-        retrievalTimer.Stop();
-        var retrieval = matches.Select(ToRetrieval).ToArray();
-
-        if (matches.Count == 0)
+        if (retrieved.Matches.Count == 0)
         {
             overall.Stop();
             return new KnowledgeAnswer(
                 "The available project knowledge does not provide enough information to answer this question.",
                 [], retrieval, false,
                 new KnowledgeAskDiagnostics(
-                    queryResult.DurationMilliseconds, retrievalTimer.ElapsedMilliseconds, 0,
-                    overall.ElapsedMilliseconds, null, null, null, index));
+                    retrieved.Mode.ToString(), retrieved.QueryEmbeddingMilliseconds,
+                    retrieved.SearchMilliseconds, 0, overall.ElapsedMilliseconds,
+                    null, null, null, retrieved.Index));
         }
 
         var generation = await generationClient.GenerateAsync(
-            new GroundedGenerationRequest(KnowledgePrompt.SystemMessage, question.Trim(), matches.Select(x => x.Chunk).ToArray()),
+            new GroundedGenerationRequest(
+                KnowledgePrompt.SystemMessage,
+                question.Trim(),
+                retrieved.Matches.Select(x => x.Chunk).ToArray()),
             cancellationToken);
 
-        var allowed = matches.ToDictionary(x => Identifier(x.Chunk), StringComparer.Ordinal);
+        var allowed = retrieved.Matches.ToDictionary(x => Identifier(x.Chunk), StringComparer.Ordinal);
         var citations = generation.Citations.Distinct(StringComparer.Ordinal).ToArray();
         if (!generation.IsSufficientEvidence && citations.Length > 0)
-        {
             throw new InvalidOperationException("An insufficient-evidence response cannot contain citations.");
-        }
-
-        if ((generation.IsSufficientEvidence && citations.Length == 0) || citations.Any(citation => !allowed.ContainsKey(citation)))
-        {
+        if ((generation.IsSufficientEvidence && citations.Length == 0) ||
+            citations.Any(citation => !allowed.ContainsKey(citation)))
             throw new InvalidOperationException("The grounded generation response contained missing or invalid citations.");
-        }
 
         var markers = CitationPattern().Matches(generation.Answer).Select(match => match.Groups[1].Value).ToArray();
         if (markers.Any(marker => !allowed.ContainsKey(marker)))
-        {
             throw new InvalidOperationException("The grounded answer cited a source that was not retrieved.");
-        }
 
         var answer = generation.Answer.Trim();
         foreach (var citation in citations.Where(citation => !answer.Contains($"[{citation}]", StringComparison.Ordinal)))
-        {
             answer += $" [{citation}]";
-        }
 
         var sources = citations.Select(citation =>
         {
@@ -78,64 +67,37 @@ public sealed partial class KnowledgeService(
         return new KnowledgeAnswer(
             answer, sources, retrieval, generation.IsSufficientEvidence,
             new KnowledgeAskDiagnostics(
-                queryResult.DurationMilliseconds, retrievalTimer.ElapsedMilliseconds,
-                generation.DurationMilliseconds, overall.ElapsedMilliseconds,
-                generation.InputTokens, generation.OutputTokens, generation.TotalTokens, index));
+                retrieved.Mode.ToString(), retrieved.QueryEmbeddingMilliseconds,
+                retrieved.SearchMilliseconds, generation.DurationMilliseconds,
+                overall.ElapsedMilliseconds, generation.InputTokens,
+                generation.OutputTokens, generation.TotalTokens, retrieved.Index));
     }
 
-    private async Task<KnowledgeIndexDiagnostics> EnsureIndexedAsync(CancellationToken cancellationToken)
+    internal static string? ValidateSource(string? source)
     {
-        if (_index is not null) return _index;
-        await _indexLock.WaitAsync(cancellationToken);
-        try
-        {
-            if (_index is not null) return _index;
-            var timer = Stopwatch.StartNew();
-            var documents = await loader.LoadAsync(cancellationToken);
-            var chunks = documents.SelectMany(chunker.Chunk).ToArray();
-            var embedded = new List<KnowledgeChunk>(chunks.Length);
-            var calls = 0;
-            var dimensions = 0;
-            long embeddingDuration = 0;
-            var embeddingTokens = 0;
-            var hasEmbeddingTokens = false;
-
-            foreach (var batch in chunks.Chunk(options.EmbeddingBatchSize))
-            {
-                var result = await embeddingClient.EmbedBatchAsync(batch.Select(x => x.Text).ToArray(), cancellationToken);
-                calls++;
-                embeddingDuration += result.DurationMilliseconds;
-                if (result.InputTokens is int tokens)
-                {
-                    embeddingTokens += tokens;
-                    hasEmbeddingTokens = true;
-                }
-                if (result.Embeddings.Count != batch.Length) throw new InvalidOperationException("Embedding count did not match chunk count.");
-                for (var i = 0; i < batch.Length; i++)
-                {
-                    dimensions = result.Embeddings[i].Values.Count;
-                    embedded.Add(batch[i] with { Embedding = result.Embeddings[i].Values });
-                }
-            }
-
-            vectorStore.Replace(embedded);
-            timer.Stop();
-            _index = new KnowledgeIndexDiagnostics(
-                documents.Count, chunks.Length, calls, dimensions, embeddingDuration,
-                hasEmbeddingTokens ? embeddingTokens : null, timer.ElapsedMilliseconds, []);
-            return _index;
-        }
-        finally
-        {
-            _indexLock.Release();
-        }
+        if (string.IsNullOrWhiteSpace(source)) return null;
+        source = source.Trim();
+        if (source.Length > 128 ||
+            source != Path.GetFileName(source) ||
+            !(source.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ||
+              source.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException("Source must be a Markdown or text filename without a path.", nameof(source));
+        return source;
     }
 
-    private static KnowledgeRetrieval ToRetrieval(KnowledgeSearchResult result) =>
-        new(result.Chunk.Source, result.Chunk.ChunkId, result.Chunk.Position, Math.Round(result.Similarity, 6));
+    private static KnowledgeRetrieval ToRetrieval(KnowledgeRetrieverMatch result) =>
+        new(
+            result.Chunk.Source,
+            result.Chunk.ChunkId,
+            result.Chunk.Position,
+            result.Rank,
+            result.Mode.ToString(),
+            Math.Round(result.Score, 6),
+            result.Similarity is double similarity ? Math.Round(similarity, 6) : null,
+            result.RerankerScore is double reranker ? Math.Round(reranker, 6) : null);
 
     private static string Identifier(KnowledgeChunk chunk) => $"{chunk.Source}#{chunk.ChunkId}";
 
-    [GeneratedRegex(@"\[([^\[\]]+\.md#chunk-\d+)\]", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\[([^\[\]]+\.(?:md|txt)#chunk-\d+)\]", RegexOptions.IgnoreCase)]
     private static partial Regex CitationPattern();
 }

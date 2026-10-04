@@ -7,7 +7,9 @@ namespace AgentForge.Api.Controllers;
 
 [ApiController]
 [Route("api/knowledge")]
-public sealed class KnowledgeController(IKnowledgeService knowledge) : ControllerBase
+public sealed class KnowledgeController(
+    IKnowledgeService knowledge,
+    IServiceProvider services) : ControllerBase
 {
     [HttpPost("ask")]
     [ProducesResponseType<KnowledgeAnswer>(StatusCodes.Status200OK)]
@@ -22,6 +24,33 @@ public sealed class KnowledgeController(IKnowledgeService knowledge) : Controlle
             return ValidationProblem(ModelState);
         }
 
-        return Ok(await knowledge.AskAsync(request.Question, cancellationToken));
+        try
+        {
+            return Ok(await knowledge.AskAsync(request.Question, request.Source, cancellationToken));
+        }
+        catch (ArgumentException exception)
+        {
+            ModelState.AddModelError(nameof(request.Source), exception.Message);
+            return ValidationProblem(ModelState);
+        }
+    }
+
+    [HttpPost("index")]
+    [ProducesResponseType<KnowledgeIndexingResult>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<KnowledgeIndexingResult>> IndexAsync(CancellationToken cancellationToken)
+    {
+        var manager = services.GetService<IKnowledgeIndexManager>();
+        if (manager is null)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Managed knowledge indexing is not configured",
+                Detail = "Select the AzureAiSearch knowledge retriever to initialize its managed index."
+            });
+        }
+
+        return Ok(await manager.InitializeAndIndexAsync(cancellationToken));
     }
 }

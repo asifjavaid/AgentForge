@@ -13,6 +13,7 @@ builder.Services
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<AzureSearchExceptionHandler>();
 builder.Services.AddExceptionHandler<LlmExceptionHandler>();
 builder.Services.AddExceptionHandler<AgentExceptionHandler>();
 
