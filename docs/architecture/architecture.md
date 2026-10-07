@@ -1,6 +1,6 @@
 # AgentForge architecture
 
-Assessment 05A preserves the layered dependency direction while adding deterministic retrieval-augmented generation beside the existing requirement analyzer and repository agent.
+Assessment 06 preserves the layered dependency direction while adding a bounded read-only software engineering agent beside the existing requirement analyzer, repository analyzer, and RAG endpoint.
 
 ```text
 API
@@ -31,6 +31,26 @@ KnowledgeService -> IKnowledgeDocumentLoader -> Markdown/text corpus
        |          -> IEmbeddingClient -> selected provider
        |          -> IKnowledgeVectorStore -> explicit cosine + Top-K
        `----------> IGroundedGenerationClient -> selected provider
+
+POST /api/agent/ask
+       |
+       v
+SoftwareEngineeringAgent (bounded loop)
+       |
+       v
+IToolCallingClient -> Foundry model (decision engine)
+       |
+       +-> search_project_knowledge -> configured IKnowledgeRetriever
+       +-> list_files / search_code / read_file -> repository boundary
+       |
+       v
+application validation + authorization (security authority)
+       |
+       v
+structured tool result containing untrusted data -> next model turn
+       |
+       v
+validated final answer + current-run provenance
 ```
 
 Project references remain:
@@ -53,6 +73,8 @@ The API is the composition root. It selects `LlmRequirementAnalyzer` for `IRequi
 Application owns the use cases. Requirement analysis continues through `IStructuredOutputClient`. Repository analysis uses the provider-neutral `IToolCallingClient`, owns the bounded loop, carries assistant tool calls and tool results across turns, and produces the strict `RepositoryAnalysis` contract.
 
 Knowledge retrieval is separate from the tool-calling agent. `KnowledgeService` indexes the corpus once per application lifetime, creates a query embedding, performs deterministic thresholded Top-K retrieval, and sends only selected chunks to grounded generation. It validates every returned citation against the retrieved source identifiers. Provider SDK types do not cross the Application boundary.
+
+`SoftwareEngineeringAgent` owns the Assessment 06 agent loop. The model directly chooses whether to answer, search project knowledge, inspect the repository, or use both sources. There is no keyword router and no preliminary classifier call. The application validates every proposed tool name and argument, applies step/call/result/time budgets, blocks repeated identical calls, and accepts final citations only when their evidence was returned during the current run. All conversation and evidence state is local to one `AskAsync` invocation.
 
 ### Domain
 
@@ -93,6 +115,27 @@ User goal
 
 The loop defaults to ten model turns and has an overall timeout. Parallel tool calls are disabled because strict structured function schemas require it. A denied call is returned to the model as a sanitized tool error so useful analysis can continue; no denied operation is executed.
 
+## Read-only software engineering agent
+
+```text
+User
+  -> Agent Orchestrator
+  -> Foundry Model
+  -> Tool Request (model proposes)
+  -> Application Validation / Authorization (application decides permission)
+  -> Bounded read-only tool (application executes)
+  -> Structured Tool Result containing untrusted data
+  -> Foundry Model
+  -> possibly another bounded tool request
+  -> validated final answer and provenance
+```
+
+The model is the decision engine; it may choose zero, one, or multiple tools. The application is always the security authority. The only tools are `search_project_knowledge`, `list_files`, `search_code`, and `read_file`. There is no shell, process, write, delete, deployment, credential, package-installation, or Azure-mutation tool.
+
+Project knowledge represents documented or intended behavior. Repository evidence represents actual implementation. A compliance conclusion requires both. Knowledge chunks, repository text, user input, and tool results are untrusted data even when they contain instruction-like language. Tool outputs remain distinct tool-role messages and never become system instructions.
+
+The loop defaults to eight model steps, twelve tool calls, four knowledge results, 60,000 total tool-result characters, and a 180-second run timeout. Exact duplicate calls terminate safely. Explicit outcomes include completed, insufficient evidence, invalid tool request, tool failure, step/call budget exhaustion, and cancellation. Public tool execution records contain only safe metadata and evidence identifiers, not hidden reasoning or complete file contents.
+
 ## Structured output flow
 
 ```text
@@ -125,7 +168,7 @@ Structured Output
     -> Tool Calling + read-only Repository Intelligence
     -> Local RAG fundamentals (current)
     -> Azure AI Search / production retrieval
-    -> Agents
+    -> Read-only software engineering agent (current)
     -> Multi-Agent Orchestration
     -> MCP
     -> Evaluation

@@ -15,7 +15,7 @@ public sealed partial class KnowledgeService(
     {
         if (string.IsNullOrWhiteSpace(question))
             throw new ArgumentException("Question is required.", nameof(question));
-        source = ValidateSource(source);
+        source = KnowledgeFilterValidation.ValidateSource(source);
 
         var overall = Stopwatch.StartNew();
         var retrieved = await retriever.RetrieveAsync(
@@ -71,18 +71,6 @@ public sealed partial class KnowledgeService(
                 retrieved.SearchMilliseconds, generation.DurationMilliseconds,
                 overall.ElapsedMilliseconds, generation.InputTokens,
                 generation.OutputTokens, generation.TotalTokens, retrieved.Index));
-    }
-
-    internal static string? ValidateSource(string? source)
-    {
-        if (string.IsNullOrWhiteSpace(source)) return null;
-        source = source.Trim();
-        if (source.Length > 128 ||
-            source != Path.GetFileName(source) ||
-            !(source.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ||
-              source.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)))
-            throw new ArgumentException("Source must be a Markdown or text filename without a path.", nameof(source));
-        return source;
     }
 
     private static KnowledgeRetrieval ToRetrieval(KnowledgeRetrieverMatch result) =>

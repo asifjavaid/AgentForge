@@ -38,7 +38,7 @@ internal static class ChatToolCallingProtocol
         {
             throw new AgentOperationException(
                 AgentFailureKind.InvalidResponse,
-                "The model did not return a complete repository-agent response.");
+                "The model did not return a complete agent response.");
         }
 
         var calls = completion.ToolCalls

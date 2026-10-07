@@ -19,23 +19,23 @@ public sealed class AgentExceptionHandler(ILogger<AgentExceptionHandler> logger)
         var (statusCode, title, detail) = agentException.FailureKind switch
         {
             AgentFailureKind.InvalidRequest or AgentFailureKind.InvalidArguments =>
-                (StatusCodes.Status400BadRequest, "Invalid repository analysis request", "The repository analysis request or tool arguments are invalid."),
+                (StatusCodes.Status400BadRequest, "Invalid agent request", "The agent request or proposed tool arguments are invalid."),
             AgentFailureKind.AccessDenied =>
                 (StatusCodes.Status403Forbidden, "Repository access denied", "The requested repository access is outside the permitted read-only boundary."),
             AgentFailureKind.Timeout =>
-                (StatusCodes.Status504GatewayTimeout, "Repository analysis timeout", "Repository analysis did not finish within the configured time limit."),
+                (StatusCodes.Status504GatewayTimeout, "Agent timeout", "The agent did not finish within the configured time limit."),
             AgentFailureKind.IterationLimit =>
                 (StatusCodes.Status502BadGateway, "Agent iteration limit reached", "Repository analysis stopped at the configured iteration limit."),
             AgentFailureKind.InvalidTool =>
                 (StatusCodes.Status502BadGateway, "Invalid agent tool request", "The model requested a tool that the application does not permit."),
             AgentFailureKind.InvalidResponse =>
-                (StatusCodes.Status502BadGateway, "Invalid agent response", "The model returned an invalid repository analysis response."),
+                (StatusCodes.Status502BadGateway, "Invalid agent response", "The model returned an invalid agent response."),
             _ =>
-                (StatusCodes.Status502BadGateway, "Repository analysis failure", "The repository analysis agent could not complete the request.")
+                (StatusCodes.Status502BadGateway, "Agent failure", "The agent could not complete the request.")
         };
 
         logger.LogWarning(
-            "Repository analysis failed. FailureKind: {FailureKind}; TraceIdentifier: {TraceIdentifier}",
+            "Agent operation failed. FailureKind: {FailureKind}; TraceIdentifier: {TraceIdentifier}",
             agentException.FailureKind,
             httpContext.TraceIdentifier);
 

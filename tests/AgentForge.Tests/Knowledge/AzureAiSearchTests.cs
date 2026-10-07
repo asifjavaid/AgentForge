@@ -237,7 +237,7 @@ public sealed class AzureAiSearchTests
     [InlineData("notes.pdf")]
     [InlineData("C:\\knowledge\\security.md")]
     public void PublicSourceFilter_RejectsPathsAndArbitraryOData(string source) =>
-        Assert.Throws<ArgumentException>(() => KnowledgeService.ValidateSource(source));
+        Assert.Throws<ArgumentException>(() => KnowledgeFilterValidation.ValidateSource(source));
 
     [Fact]
     public void SourceFilter_EscapesApostrophesRatherThanAcceptingODataSyntax()

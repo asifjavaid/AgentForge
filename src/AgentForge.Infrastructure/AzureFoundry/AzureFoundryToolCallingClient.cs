@@ -1,4 +1,5 @@
 using System.ClientModel.Primitives;
+using System.ClientModel;
 using System.Diagnostics;
 using AgentForge.Application.Agents;
 using AgentForge.Infrastructure.ToolCalling;
@@ -71,9 +72,10 @@ public sealed class AzureFoundryToolCallingClient(
         {
             stopwatch.Stop();
             logger.LogWarning(
-                "Agent model turn failed. Provider: AzureFoundry; Model: {Model}; DurationMs: {DurationMs}; ExceptionType: {ExceptionType}",
+                "Agent model turn failed. Provider: AzureFoundry; Model: {Model}; DurationMs: {DurationMs}; HttpStatus: {HttpStatus}; ExceptionType: {ExceptionType}",
                 deployment,
                 stopwatch.ElapsedMilliseconds,
+                (exception as ClientResultException)?.Status,
                 exception.GetType().Name);
             throw new AgentOperationException(
                 AgentFailureKind.Provider,
