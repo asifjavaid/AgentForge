@@ -81,8 +81,11 @@ Retrieved instructions never gain authority. They cannot create capabilities tha
 | Model steps | 8 |
 | Tool calls | 12 |
 | Knowledge results per call | 4 |
+| Repository search results presented per call | 12, diversified across matching files |
+| Executed repository searches per run | 3 |
 | Total tool-result characters | 60,000 |
 | Agent timeout | 180 seconds |
+| Foundry retries per model request | 2, transient errors only |
 | Repository list results | 200 |
 | Repository search results | 50 |
 | Repository search files | 2,000 |
@@ -161,7 +164,7 @@ Across the authoritative nine runs, total client latency was 297,058 ms, mean la
 
 ## 16. Automated test results
 
-Final verification result: **129 passed, 0 failed, 0 skipped**. Tests are deterministic and use fake/scripted model behavior; they do not require paid Azure/model calls. The 30-test increase over the 99-test Assessment 05B baseline covers the endpoint, agent loop, tool selection paths, budgets, validation, failures, provenance, both injection fixtures, cancellation, and concurrent-run isolation.
+Final follow-up verification result: **141 passed, 0 failed, 0 skipped**. Tests are deterministic and use fake/scripted model behavior; they do not require paid Azure/model calls. The original Assessment 06 implementation raised the 99-test Assessment 05B baseline to 129; this follow-up adds 12 regression cases for search guidance, diversified result presentation, repository-search budgets, and bounded Foundry retry configuration.
 
 Formatting/analyzer verification completed with no changes required. Per the explicit user instruction for this work, no Git command was run; therefore the prompt's `git diff --check` step was intentionally skipped and is the only unperformed Git-specific verification.
 
@@ -209,7 +212,7 @@ This inventory is based on the implemented Assessment 06 work, not Git output, b
 
 - Tool choice and search strategy remain probabilistic. A4 shows that correct family selection does not guarantee efficient navigation or synthesis within eight steps.
 - Exact-duplicate prevention does not identify semantically redundant calls with different query text or arguments.
-- A single provider 429 currently aborts the HTTP request; bounded retry/backoff or resumable runs could improve resilience in a future assessment.
+- Foundry transient failures now receive at most two SDK retries per model request. A long service-provided `Retry-After` can still consume much of the 180-second overall run timeout; the outer cancellation remains authoritative and no unbounded retry occurs.
 - Citation validation proves provenance, not that every prose claim is perfectly entailed by its source.
 - Literal repository search is intentionally simple and lacks symbol/AST indexing.
 - The evaluation is small and tied to one model/deployment configuration.
@@ -227,6 +230,55 @@ No-tool decisions save model turns, embeddings, Search operations, and repeated 
 - External content stays untrusted even when retrieved by a trusted tool.
 - Public failures and execution summaries are sanitized; full file contents, vectors, secrets, access tokens, and hidden reasoning are not logged or returned.
 - Per-run mutable state is local, so concurrent requests do not share evidence or counters.
+
+# Assessment 06 Follow-up — A4 Efficiency and A5 Throttling
+
+Follow-up evaluation date: 2026-10-17. The original A4 and A5 question text was reused unchanged, and tool selection was not forced.
+
+## Investigation and changes
+
+### A4
+
+The original tool descriptions made `list_files` look like the natural first repository tool and did not explain that `search_code` can search from the repository root. The model therefore descended the source tree one directory per turn. Search results could also expose up to 50 line matches (12.6K characters in one observed call), encouraging serial file reads.
+
+The correction is general rather than evaluation-specific:
+
+- `search_code` is described as the preferred first tool for named implementation concepts and its line context is explicitly usable as evidence.
+- `list_files` is reserved for questions about structure or cases where a literal search cannot yet be formed; one-level directory walking is discouraged.
+- The prompt advises narrowing to a known subsystem, avoiding redundant file reads, and requesting independent reads together when they are genuinely needed.
+- Software-agent search presentation is capped at 12 matches and selected round-robin across matching files, preserving source diversity while reducing context size.
+- `.vs` is excluded from repository traversal because local IDE state polluted a live search result.
+
+The eight-step limit was not increased, and no question-specific route or forced tool selection was added.
+
+### A5
+
+The Foundry tool-calling client explicitly configured `ClientRetryPolicy(0)`, so an upstream 429 failed immediately. It now uses the installed System.ClientModel bounded retry policy with `AzureFoundry:ToolCallingMaxRetries = 2`. That policy handles transient responses including 429, honors service `Retry-After`, and observes the existing cancellation token. The enclosing 180-second agent timeout remains the overall deadline. The retry count is restricted to 0–3 by validated configuration; permanent validation/authentication responses are not made retryable.
+
+The A5 rerun also showed that prompt-only “stop searching” guidance was not reliable: the model continued trying synonyms. A separate general execution budget now permits at most three successful `search_code` calls per run. A fourth proposal terminates safely as `InsufficientEvidence`; it is recorded as a rejected execution and is not dispatched. This is a capability budget, not semantic routing.
+
+## Final unchanged-prompt results
+
+| Case | HTTP | Actual sequence | Model turns | Client / server latency | Tokens (input/output/total) | Termination | Result |
+|---|---:|---|---:|---:|---:|---|---|
+| A4 | 200 | `search_project_knowledge` → `search_code` | 3 | 47,542 / 46,968 ms | 5,635 / 1,085 / 6,720 | `Completed` | Correctly separated documented requirement, actual implementation, and assessment; concluded compliance with validated knowledge and repository citations |
+| A5 | 200 | `search_project_knowledge` → `search_code` ×3 → `search_project_knowledge` → rejected fourth `search_code` | 6 | 73,881 / 73,366 ms | 12,745 / 950 / 13,695 | `InsufficientEvidence` | Returned no database claim or citation; clearly stated that the bounded search budget did not establish the fact |
+
+A4 improved from eight model turns/eight tool calls/17,101 tokens and `MaxStepsReached` to three turns/two calls/6,720 tokens and `Completed`. It made no `list_files` or file-read call because the diversified search context was sufficient.
+
+A5 no longer surfaced HTTP 429 or generic HTTP 502. An intermediate retry-enabled A4 run contained a 74.2-second successful model turn, consistent with a service-directed delay, and the outer 180-second cancellation stopped that run at HTTP 504. This demonstrates both sides of the policy: transient recovery is possible, but the overall timeout prevents retry storms. The final A4/A5 runs completed without an escaped provider error.
+
+## Prompt-injection regression confirmation
+
+The two deterministic `IndirectInjection_RemainsData` cases still pass for `search_project_knowledge` and `read_file`. The tool registry remains limited to knowledge search plus `list_files`, `search_code`, and `read_file`; no shell, write, delete, deployment, API-key, or Azure-mutation capability was introduced. Thus the previously accepted A6 and A7 protections remain intact.
+
+## Follow-up verification
+
+- Automated tests: **141 passed, 0 failed, 0 skipped**.
+- Formatting and analyzer verification: passed; **0 of 122 files formatted**.
+- No Azure resource or RBAC mutation was performed.
+- No Git command was run because the earlier explicit “no git commands” instruction remains in force; `git diff --check` was therefore skipped.
+- Assessment 07 was not started.
 
 # Assessment 06 — Learning Report
 

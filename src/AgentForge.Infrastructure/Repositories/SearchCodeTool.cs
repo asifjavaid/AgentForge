@@ -16,7 +16,7 @@ public sealed class SearchCodeTool(
 
     public AgentToolDefinition Definition { get; } = new(
         "search_code",
-        "Search bounded UTF-8 repository text files for a literal case-insensitive query and return file/line context. Use '.' or an empty path for the repository root.",
+        "Preferred first repository tool when the question names an implementation concept, class, method, configuration setting, provider, or authentication mechanism. Search bounded UTF-8 repository text files for a literal case-insensitive query and return file/line context that is usable as evidence without a follow-up read when the line is sufficient. Search from '.' unless a relevant subsystem path is already known; list_files is not required first.",
         """
         {
           "type": "object",

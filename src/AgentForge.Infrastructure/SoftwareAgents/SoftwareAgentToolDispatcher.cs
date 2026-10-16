@@ -44,10 +44,65 @@ internal sealed class SoftwareAgentToolDispatcher : ISoftwareAgentToolDispatcher
 
         var repository = _boundary.ResolveRepository(_options.RepositoryPath);
         var result = await _repositories.DispatchAsync(repository, call, cancellationToken);
+        var content = call.Name == "search_code"
+            ? BoundSearchResult(result.Content, _options.MaxRepositorySearchResults)
+            : result.Content;
         return new SoftwareAgentToolResult(
-            result.Content,
-            ExtractRepositoryEvidence(call.Name, result.Content),
+            content,
+            ExtractRepositoryEvidence(call.Name, content),
             "repository");
+    }
+
+    internal static string BoundSearchResult(string content, int maximumResults)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("matches", out var matches) || matches.ValueKind != JsonValueKind.Array)
+                return content;
+
+            var allMatches = matches.EnumerateArray().Select(match => match.Clone()).ToArray();
+            if (allMatches.Length <= maximumResults)
+                return content;
+
+            var groups = allMatches
+                .GroupBy(match => match.GetProperty("path").GetString() ?? string.Empty, StringComparer.Ordinal)
+                .Select(group => group.ToArray())
+                .ToArray();
+            var selected = new List<JsonElement>(maximumResults);
+            for (var index = 0; selected.Count < maximumResults; index++)
+            {
+                var added = false;
+                foreach (var group in groups)
+                {
+                    if (index >= group.Length)
+                        continue;
+                    selected.Add(group[index]);
+                    added = true;
+                    if (selected.Count == maximumResults)
+                        break;
+                }
+
+                if (!added)
+                    break;
+            }
+
+            var sourceTruncated = root.TryGetProperty("truncated", out var truncated) && truncated.GetBoolean();
+            var scannedFiles = root.TryGetProperty("scannedFiles", out var scanned) ? scanned.GetInt32() : 0;
+            return JsonSerializer.Serialize(new
+            {
+                matches = selected,
+                truncated = sourceTruncated || selected.Count < allMatches.Length,
+                scannedFiles,
+                returnedMatches = selected.Count,
+                availableMatches = allMatches.Length
+            });
+        }
+        catch (JsonException)
+        {
+            return content;
+        }
     }
 
     private static IReadOnlyList<string> ExtractRepositoryEvidence(string toolName, string content)

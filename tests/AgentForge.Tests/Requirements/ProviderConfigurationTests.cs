@@ -141,6 +141,28 @@ public sealed class ProviderConfigurationTests
         Assert.Equal(LlmFailureKind.Configuration, exception.FailureKind);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void FoundryOptions_AcceptsBoundedToolCallingRetries(int maxRetries)
+    {
+        var options = new AzureFoundryOptions { ToolCallingMaxRetries = maxRetries };
+
+        Assert.Equal(maxRetries, options.GetToolCallingMaxRetries());
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(4)]
+    public void FoundryOptions_RejectsUnboundedToolCallingRetries(int maxRetries)
+    {
+        var exception = Assert.Throws<LlmOperationException>(() =>
+            new AzureFoundryOptions { ToolCallingMaxRetries = maxRetries }.GetToolCallingMaxRetries());
+
+        Assert.Equal(LlmFailureKind.Configuration, exception.FailureKind);
+    }
+
     [Fact]
     public void FoundryStructuredResponse_DeserializesExistingDomainContract()
     {

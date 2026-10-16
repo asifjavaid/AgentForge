@@ -19,7 +19,7 @@ public sealed class RepositoryAnalysisOptions
     public int MaxToolResultCharacters { get; set; } = 100_000;
 
     public string[] IgnoredDirectories { get; set; } =
-        [".git", "bin", "obj", "node_modules", "dist", "build"];
+        [".git", ".vs", "bin", "obj", "node_modules", "dist", "build"];
 
     public string GetAllowedRoot()
     {

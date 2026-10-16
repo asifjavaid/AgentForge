@@ -100,6 +100,19 @@ public sealed partial class SoftwareEngineeringAgent(
                     }
 
                     toolCallCount++;
+                    if (call.Name == "search_code" &&
+                        executions.Count(execution => execution.ToolName == "search_code" && execution.Success) >=
+                            options.MaxRepositorySearchCalls)
+                    {
+                        executions.Add(new SoftwareAgentToolExecution(
+                            call.Id, call.Name, false, 0, 0, [], "repository_search_budget_exhausted"));
+                        timer.Stop();
+                        return BuildRun(
+                            "The bounded repository-search budget was exhausted before sufficient evidence was established.",
+                            [],
+                            SoftwareAgentTerminationReason.InsufficientEvidence);
+                    }
+
                     var fingerprint = $"{call.Name}\n{NormalizeJson(call.ArgumentsJson)}";
                     if (!callFingerprints.Add(fingerprint))
                     {

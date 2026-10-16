@@ -38,7 +38,9 @@ public sealed class AzureFoundryToolCallingClient(
                 new OpenAIClientOptions
                 {
                     Endpoint = endpoint,
-                    RetryPolicy = new ClientRetryPolicy(0)
+                    // The SDK policy retries only transient responses, including 429,
+                    // honors Retry-After, and observes the caller's cancellation token.
+                    RetryPolicy = new ClientRetryPolicy(_options.GetToolCallingMaxRetries())
                 });
 #pragma warning restore OPENAI001
 

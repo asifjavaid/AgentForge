@@ -15,7 +15,7 @@ public sealed class ListFilesTool(
 
     public AgentToolDefinition Definition { get; } = new(
         "list_files",
-        "List bounded files and directories within the authorized repository. Use '.' or an empty path for the repository root. Generated directories are skipped during recursion.",
+        "Discover bounded repository structure when the directory layout itself is needed or a useful literal code search cannot yet be formed. Do not use this tool to walk known source trees one directory at a time; prefer search_code from '.' for named classes, configuration, authentication, or implementation concepts. Use '.' or an empty path for the repository root. Generated directories are skipped during recursion.",
         """
         {
           "type": "object",

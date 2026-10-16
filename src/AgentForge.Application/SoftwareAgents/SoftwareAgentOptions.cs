@@ -8,6 +8,8 @@ public sealed class SoftwareAgentOptions
     public int MaxSteps { get; init; } = 8;
     public int MaxToolCalls { get; init; } = 12;
     public int MaxKnowledgeResults { get; init; } = 4;
+    public int MaxRepositorySearchResults { get; init; } = 12;
+    public int MaxRepositorySearchCalls { get; init; } = 3;
     public int MaxTotalToolResultCharacters { get; init; } = 60_000;
     public int TimeoutSeconds { get; init; } = 180;
 
@@ -21,6 +23,10 @@ public sealed class SoftwareAgentOptions
             throw new InvalidOperationException("SoftwareAgent:MaxToolCalls must be between 1 and 50.");
         if (MaxKnowledgeResults is < 1 or > 10)
             throw new InvalidOperationException("SoftwareAgent:MaxKnowledgeResults must be between 1 and 10.");
+        if (MaxRepositorySearchResults is < 1 or > 50)
+            throw new InvalidOperationException("SoftwareAgent:MaxRepositorySearchResults must be between 1 and 50.");
+        if (MaxRepositorySearchCalls is < 1 or > 10)
+            throw new InvalidOperationException("SoftwareAgent:MaxRepositorySearchCalls must be between 1 and 10.");
         if (MaxTotalToolResultCharacters is < 1_024 or > 500_000)
             throw new InvalidOperationException("SoftwareAgent:MaxTotalToolResultCharacters is outside the permitted range.");
         if (TimeoutSeconds is < 1 or > 600)

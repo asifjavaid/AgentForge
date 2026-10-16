@@ -112,6 +112,26 @@ public sealed class SoftwareEngineeringAgentTests
     }
 
     [Fact]
+    public async Task RepositorySearchBudget_TerminatesAsInsufficientEvidence()
+    {
+        var agent = Agent(
+            new ScriptedClient(
+                Call("s1", "search_code", """{"query":"database","path":"."}"""),
+                Call("s2", "search_code", """{"query":"persistent profile","path":"."}"""),
+                Call("s3", "search_code", """{"query":"user profile","path":"."}"""),
+                Call("s4", "search_code", """{"query":"storage engine","path":"."}""")),
+            new FakeDispatcher().With("search_code", "{\"matches\":[]}"),
+            new SoftwareAgentOptions { MaxRepositorySearchCalls = 3 });
+
+        var result = await agent.AskAsync("Find an absent project fact.");
+
+        Assert.Equal(SoftwareAgentTerminationReason.InsufficientEvidence, result.TerminationReason);
+        Assert.Equal(4, result.ToolCallCount);
+        Assert.Equal(3, result.ToolExecutions.Count(execution => execution.Success));
+        Assert.Equal("repository_search_budget_exhausted", result.ToolExecutions[^1].ErrorCode);
+    }
+
+    [Fact]
     public async Task RepeatedIdenticalCall_IsRejected()
     {
         var call = Call("l1", "list_files", """{"path":".","recursive":false}""");

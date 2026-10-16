@@ -18,6 +18,8 @@ public sealed class AzureFoundryOptions
 
     public int TimeoutSeconds { get; init; } = 60;
 
+    public int ToolCallingMaxRetries { get; init; } = 2;
+
     public Uri GetChatEndpoint()
         => NormalizeEndpoint(Endpoint, "Azure Foundry endpoint configuration is invalid.");
 
@@ -84,5 +86,17 @@ public sealed class AzureFoundryOptions
         }
 
         return tenantId.ToString();
+    }
+
+    public int GetToolCallingMaxRetries()
+    {
+        if (ToolCallingMaxRetries is < 0 or > 3)
+        {
+            throw new LlmOperationException(
+                LlmFailureKind.Configuration,
+                "Azure Foundry tool-calling retry configuration must be between 0 and 3.");
+        }
+
+        return ToolCallingMaxRetries;
     }
 }
