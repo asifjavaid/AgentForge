@@ -24,6 +24,14 @@ public sealed class AgentExceptionHandler(ILogger<AgentExceptionHandler> logger)
                 (StatusCodes.Status403Forbidden, "Repository access denied", "The requested repository access is outside the permitted read-only boundary."),
             AgentFailureKind.Timeout =>
                 (StatusCodes.Status504GatewayTimeout, "Agent timeout", "The agent did not finish within the configured time limit."),
+            AgentFailureKind.NotFound =>
+                (StatusCodes.Status404NotFound, "Durable run not found", "The requested durable agent run was not found."),
+            AgentFailureKind.Conflict =>
+                (StatusCodes.Status409Conflict, "Durable run conflict", "The durable run cannot be advanced in its current state."),
+            AgentFailureKind.CorruptState =>
+                (StatusCodes.Status500InternalServerError, "Invalid durable checkpoint", "The durable checkpoint failed validation and was not executed."),
+            AgentFailureKind.Storage =>
+                (StatusCodes.Status503ServiceUnavailable, "Checkpoint storage unavailable", "Durable checkpoint storage is temporarily unavailable."),
             AgentFailureKind.IterationLimit =>
                 (StatusCodes.Status502BadGateway, "Agent iteration limit reached", "Repository analysis stopped at the configured iteration limit."),
             AgentFailureKind.InvalidTool =>

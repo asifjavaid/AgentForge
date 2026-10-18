@@ -21,6 +21,7 @@ builder.Services.AddLlmProvider(builder.Configuration);
 builder.Services.AddRepositoryAnalysis(builder.Configuration);
 builder.Services.AddKnowledge(builder.Configuration, builder.Environment);
 builder.Services.AddSoftwareEngineeringAgent(builder.Configuration);
+builder.Services.AddDurableAgentRuns(builder.Configuration, builder.Environment);
 builder.Services.AddScoped<IRequirementAnalyzer, LlmRequirementAnalyzer>();
 
 var app = builder.Build();

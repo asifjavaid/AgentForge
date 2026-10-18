@@ -9,5 +9,9 @@ public enum AgentFailureKind
     IterationLimit,
     InvalidResponse,
     Timeout,
-    Provider
+    Provider,
+    NotFound,
+    Conflict,
+    CorruptState,
+    Storage
 }
