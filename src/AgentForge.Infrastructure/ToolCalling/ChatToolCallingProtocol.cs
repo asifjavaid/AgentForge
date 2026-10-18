@@ -13,23 +13,7 @@ internal static class ChatToolCallingProtocol
         CancellationToken cancellationToken)
     {
         var messages = request.Messages.Select(ToChatMessage).ToArray();
-        var options = new ChatCompletionOptions
-        {
-            AllowParallelToolCalls = false,
-            ResponseFormat = ChatResponseFormat.CreateJsonSchemaFormat(
-                request.ResponseSchemaName,
-                BinaryData.FromString(request.ResponseJsonSchema),
-                jsonSchemaIsStrict: true)
-        };
-
-        foreach (var tool in request.Tools)
-        {
-            options.Tools.Add(ChatTool.CreateFunctionTool(
-                tool.Name,
-                tool.Description,
-                BinaryData.FromString(tool.JsonSchema),
-                functionSchemaIsStrict: true));
-        }
+        var options = CreateOptions(request);
 
         ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
 
@@ -60,6 +44,31 @@ internal static class ChatToolCallingProtocol
                 completion.Usage?.InputTokenCount,
                 completion.Usage?.OutputTokenCount,
                 completion.Usage?.TotalTokenCount));
+    }
+
+    internal static ChatCompletionOptions CreateOptions(ToolCallingRequest request)
+    {
+        var options = new ChatCompletionOptions
+        {
+            ResponseFormat = ChatResponseFormat.CreateJsonSchemaFormat(
+                request.ResponseSchemaName,
+                BinaryData.FromString(request.ResponseJsonSchema),
+                jsonSchemaIsStrict: true)
+        };
+        if (request.Tools.Count > 0)
+            options.AllowParallelToolCalls = false;
+        if (request.RequireFinalResponse)
+            options.ToolChoice = ChatToolChoice.CreateNoneChoice();
+
+        foreach (var tool in request.Tools)
+        {
+            options.Tools.Add(ChatTool.CreateFunctionTool(
+                tool.Name,
+                tool.Description,
+                BinaryData.FromString(tool.JsonSchema),
+                functionSchemaIsStrict: true));
+        }
+        return options;
     }
 
     private static ChatMessage ToChatMessage(AgentMessage message) => message.Role switch

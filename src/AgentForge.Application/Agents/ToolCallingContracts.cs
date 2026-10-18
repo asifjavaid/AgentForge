@@ -40,7 +40,8 @@ public sealed record ToolCallingRequest(
     IReadOnlyList<AgentMessage> Messages,
     IReadOnlyList<AgentToolDefinition> Tools,
     string ResponseSchemaName,
-    string ResponseJsonSchema);
+    string ResponseJsonSchema,
+    bool RequireFinalResponse = false);
 
 public interface IToolCallingClient
 {

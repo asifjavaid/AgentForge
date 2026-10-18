@@ -74,11 +74,12 @@ public sealed class AzureFoundryToolCallingClient(
         {
             stopwatch.Stop();
             logger.LogWarning(
-                "Agent model turn failed. Provider: AzureFoundry; Model: {Model}; DurationMs: {DurationMs}; HttpStatus: {HttpStatus}; ExceptionType: {ExceptionType}",
+                "Agent model turn failed. Provider: AzureFoundry; Model: {Model}; DurationMs: {DurationMs}; HttpStatus: {HttpStatus}; ExceptionType: {ExceptionType}; ProviderError: {ProviderError}",
                 deployment,
                 stopwatch.ElapsedMilliseconds,
                 (exception as ClientResultException)?.Status,
-                exception.GetType().Name);
+                exception.GetType().Name,
+                exception.Message);
             throw new AgentOperationException(
                 AgentFailureKind.Provider,
                 "Azure Foundry repository-agent request failed.",
