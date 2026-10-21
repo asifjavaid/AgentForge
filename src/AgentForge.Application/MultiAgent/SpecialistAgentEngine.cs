@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AgentForge.Application.Agents;
+using AgentForge.Application.Observability;
 using AgentForge.Application.SoftwareAgents;
 
 namespace AgentForge.Application.MultiAgent;
@@ -25,17 +26,19 @@ public sealed class SpecialistAgentEngine(
     {
         var allowedNames = AllowedTools(role);
         var definitions = dispatcher.Definitions.Where(item => allowedNames.Contains(item.Name)).ToArray();
+        var builtContext = WorkflowContextBuilder.Build(task, context);
         var messages = new List<AgentMessage>
         {
             new(AgentMessageRole.System, PromptFor(role)),
-            new(AgentMessageRole.User, BuildTaskContext(task, context))
+            new(AgentMessageRole.User, builtContext.Json)
         };
-        var evidence = context.AvailableEvidence.ToHashSet(StringComparer.Ordinal);
+        var evidence = builtContext.Evidence.ToHashSet(StringComparer.Ordinal);
         var producedEvidence = new HashSet<string>(StringComparer.Ordinal);
         var toolsUsed = new List<string>();
-        var fingerprints = new HashSet<string>(StringComparer.Ordinal);
+        var toolResults = new Dictionary<string, SoftwareAgentToolResult>(StringComparer.Ordinal);
         var modelCalls = 0;
         var toolCalls = 0;
+        var reusedToolCalls = 0;
         var inputTokens = 0;
         var outputTokens = 0;
         var totalTokens = 0;
@@ -45,20 +48,34 @@ public sealed class SpecialistAgentEngine(
         var provider = "Unknown";
         var model = "Unknown";
         var timer = Stopwatch.StartNew();
+        long modelLatency = 0;
+        long toolLatency = 0;
+        using var activity = AgentForgeTelemetry.Start("agent.specialist", context.WorkflowId, task.TaskId, role.ToString());
+        AgentForgeTelemetry.ContextCharacters.Record(builtContext.OptimizedCharacters,
+            new KeyValuePair<string, object?>("agentforge.agent.role", role.ToString()));
 
         try
         {
             while (modelCalls < context.MaxModelCalls)
             {
                 var requireFinalResponse = modelCalls == context.MaxModelCalls - 1;
+                var modelTimer = Stopwatch.StartNew();
                 var response = await client.CompleteAsync(
                     new ToolCallingRequest(messages, definitions, WorkflowSchemas.TaskOutputName,
                         WorkflowSchemas.TaskOutputFor(role), requireFinalResponse),
                     cancellationToken);
+                modelTimer.Stop();
+                modelLatency += modelTimer.ElapsedMilliseconds;
                 modelCalls++;
                 provider = response.Provider;
                 model = response.Model;
                 AddUsage(response.Usage);
+                AgentForgeTelemetry.ModelCalls.Add(1,
+                    new KeyValuePair<string, object?>("agentforge.agent.role", role.ToString()),
+                    new KeyValuePair<string, object?>("gen_ai.provider", provider),
+                    new KeyValuePair<string, object?>("gen_ai.model", model));
+                AgentForgeTelemetry.ModelLatency.Record(modelTimer.Elapsed.TotalMilliseconds,
+                    new KeyValuePair<string, object?>("agentforge.agent.role", role.ToString()));
 
                 if (response.ToolCalls.Count == 0)
                 {
@@ -77,14 +94,32 @@ public sealed class SpecialistAgentEngine(
                 {
                     if (!allowedNames.Contains(call.Name))
                         throw new AgentOperationException(AgentFailureKind.InvalidTool, "The specialist requested a tool outside its role policy.");
-                    if (toolCalls >= context.MaxToolCalls)
-                        throw new AgentOperationException(AgentFailureKind.IterationLimit, "The specialist reached its tool-call budget.");
                     var fingerprint = $"{call.Name}\n{NormalizeJson(call.ArgumentsJson)}";
-                    if (!fingerprints.Add(fingerprint))
-                        throw new AgentOperationException(AgentFailureKind.InvalidTool, "The specialist repeated an equivalent tool call.");
-
-                    toolCalls++;
-                    var result = await dispatcher.DispatchAsync(call, cancellationToken);
+                    SoftwareAgentToolResult result;
+                    if (toolResults.TryGetValue(fingerprint, out var cached))
+                    {
+                        result = cached;
+                        reusedToolCalls++;
+                        AgentForgeTelemetry.ToolCallsReused.Add(1,
+                            new KeyValuePair<string, object?>("agentforge.agent.role", role.ToString()),
+                            new KeyValuePair<string, object?>("agentforge.tool.name", call.Name));
+                    }
+                    else
+                    {
+                        if (toolCalls >= context.MaxToolCalls)
+                            throw new AgentOperationException(AgentFailureKind.IterationLimit, "The specialist reached its tool-call budget.");
+                        toolCalls++;
+                        var toolTimer = Stopwatch.StartNew();
+                        result = await dispatcher.DispatchAsync(call, cancellationToken);
+                        toolTimer.Stop();
+                        toolLatency += toolTimer.ElapsedMilliseconds;
+                        toolResults[fingerprint] = result;
+                        AgentForgeTelemetry.ToolCalls.Add(1,
+                            new KeyValuePair<string, object?>("agentforge.agent.role", role.ToString()),
+                            new KeyValuePair<string, object?>("agentforge.tool.name", call.Name));
+                        AgentForgeTelemetry.ToolLatency.Record(toolTimer.Elapsed.TotalMilliseconds,
+                            new KeyValuePair<string, object?>("agentforge.tool.name", call.Name));
+                    }
                     toolsUsed.Add(call.Name);
                     foreach (var item in result.Evidence)
                     {
@@ -113,6 +148,11 @@ public sealed class SpecialistAgentEngine(
             if (usage.InputTokens is int input) { inputTokens += input; hasInput = true; }
             if (usage.OutputTokens is int output) { outputTokens += output; hasOutput = true; }
             if (usage.TotalTokens is int total) { totalTokens += total; hasTotal = true; }
+            if (usage.TotalTokens is int measured)
+                AgentForgeTelemetry.Tokens.Add(measured,
+                    new KeyValuePair<string, object?>("agentforge.agent.role", role.ToString()),
+                    new KeyValuePair<string, object?>("gen_ai.provider", provider),
+                    new KeyValuePair<string, object?>("gen_ai.model", model));
         }
 
         AgentTaskMetrics Metrics() => new(
@@ -124,7 +164,12 @@ public sealed class SpecialistAgentEngine(
             hasOutput ? outputTokens : null,
             hasTotal ? totalTokens : null,
             timer.ElapsedMilliseconds,
-            toolsUsed.Distinct(StringComparer.Ordinal).ToArray());
+            toolsUsed.Distinct(StringComparer.Ordinal).ToArray(),
+            reusedToolCalls,
+            builtContext.OptimizedCharacters,
+            builtContext.OriginalCharacters,
+            modelLatency,
+            toolLatency);
     }
 
     internal static AgentTaskOutput ParseOutput(
@@ -184,28 +229,6 @@ public sealed class SpecialistAgentEngine(
         if (role == AgentRole.SecurityReviewer && output.RevisionTargetTaskId == taskId)
             throw Invalid("Security Reviewer cannot revise its own task.");
         return output with { Evidence = output.Evidence.Distinct(StringComparer.Ordinal).ToArray() };
-    }
-
-    private static string BuildTaskContext(WorkflowTaskState task, AgentExecutionContext context)
-    {
-        var dependencyData = context.DependencyResults.Select(item => new
-        {
-            item.TaskId,
-            role = item.Role.ToString(),
-            output = item.Output
-        });
-        return JsonSerializer.Serialize(new
-        {
-            context.WorkflowId,
-            context.CorrelationId,
-            workflowObjective = context.Objective,
-            task = new { task.TaskId, role = task.Role.ToString(), task.Objective },
-            revisionNumber = context.RevisionNumber,
-            budgets = new { context.MaxModelCalls, context.MaxToolCalls, context.MaxOutputCharacters },
-            previousOutputs = task.PreviousOutputs,
-            dependencyResults = dependencyData,
-            availableEvidence = context.AvailableEvidence
-        }, SerializerOptions);
     }
 
     private static HashSet<string> AllowedTools(AgentRole role) => role switch

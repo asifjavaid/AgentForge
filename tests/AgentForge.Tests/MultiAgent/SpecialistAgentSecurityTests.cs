@@ -225,6 +225,37 @@ public sealed class SpecialistAgentSecurityTests
         Assert.Equal(3, result.Metrics.ModelCalls);
     }
 
+    [Fact]
+    public async Task EquivalentToolCallIsReusedWithinOneAttemptWithoutSpendingBudgetAgain()
+    {
+        var dispatcher = new FakeDispatcher();
+        var client = new InspectingClient(
+            Call("search_project_knowledge"),
+            Call("search_project_knowledge"),
+            Final(AgentRole.RequirementsAnalyst, ["knowledge:authentication.md#chunk-1"]));
+        var context = Context() with { MaxToolCalls = 1 };
+        var result = await new SpecialistAgentEngine(client, dispatcher).ExecuteAsync(
+            AgentRole.RequirementsAnalyst, Task(AgentRole.RequirementsAnalyst), context, default);
+        Assert.Equal(1, dispatcher.DispatchCount);
+        Assert.Equal(1, result.Metrics.ToolCalls);
+        Assert.Equal(1, result.Metrics.ReusedToolCalls);
+    }
+
+    [Fact]
+    public async Task ToolResultCacheDoesNotCrossExecutionAttempts()
+    {
+        var dispatcher = new FakeDispatcher();
+        await new SpecialistAgentEngine(new InspectingClient(
+            Call("search_project_knowledge"), Final(AgentRole.RequirementsAnalyst,
+                ["knowledge:authentication.md#chunk-1"])), dispatcher).ExecuteAsync(
+            AgentRole.RequirementsAnalyst, Task(AgentRole.RequirementsAnalyst), Context(), default);
+        await new SpecialistAgentEngine(new InspectingClient(
+            Call("search_project_knowledge"), Final(AgentRole.RequirementsAnalyst,
+                ["knowledge:authentication.md#chunk-1"])), dispatcher).ExecuteAsync(
+            AgentRole.RequirementsAnalyst, Task(AgentRole.RequirementsAnalyst), Context(), default);
+        Assert.Equal(2, dispatcher.DispatchCount);
+    }
+
     private static WorkflowTaskState Task(AgentRole role) => new(
         role.ToString().ToLowerInvariant(), role, "Perform bounded work.", [], WorkflowTaskStatus.Running,
         1, DateTimeOffset.UtcNow, null, null, [], null, null);

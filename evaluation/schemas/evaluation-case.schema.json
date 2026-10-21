@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentforge.local/schemas/evaluation-case-v1.json",
+  "title": "AgentForge evaluation dataset v1",
+  "type": "object",
+  "required": ["datasetId", "version", "cases"],
+  "properties": {
+    "datasetId": { "type": "string", "minLength": 1 },
+    "version": { "type": "integer", "minimum": 1 },
+    "cases": {
+      "type": "array",
+      "minItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["id", "objective", "category", "requiredRoles", "expectedEvidence", "requiredAssertions", "forbiddenAssertions", "expectedOutcome", "security", "budget", "tags", "fixture"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

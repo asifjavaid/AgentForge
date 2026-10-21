@@ -23,6 +23,8 @@ builder.Services.AddKnowledge(builder.Configuration, builder.Environment);
 builder.Services.AddSoftwareEngineeringAgent(builder.Configuration);
 builder.Services.AddDurableAgentRuns(builder.Configuration, builder.Environment);
 builder.Services.AddMultiAgentWorkflows(builder.Configuration, builder.Environment);
+builder.Services.AddEvaluationAccounting(builder.Configuration);
+builder.Services.AddHumanApproval(builder.Configuration, builder.Environment);
 builder.Services.AddScoped<IRequirementAnalyzer, LlmRequirementAnalyzer>();
 
 var app = builder.Build();
@@ -34,6 +36,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseExceptionHandler();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 app.Run();

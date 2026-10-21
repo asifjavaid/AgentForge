@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using AgentForge.Application.Agents;
 using AgentForge.Application.Llm;
+using AgentForge.Application.Observability;
 using Microsoft.Extensions.Logging;
 
 namespace AgentForge.Application.MultiAgent;
@@ -77,6 +78,7 @@ public sealed class MultiAgentWorkflowManager(
         string workflowId,
         CancellationToken cancellationToken = default)
     {
+        using var activity = AgentForgeTelemetry.Start("agent.workflow.resume", workflowId);
         var checkpoint = await LoadAsync(workflowId, cancellationToken);
         if (checkpoint.Status is WorkflowStatus.Completed or WorkflowStatus.CompletedWithConcerns or
             WorkflowStatus.InsufficientEvidence)
@@ -194,6 +196,7 @@ public sealed class MultiAgentWorkflowManager(
         long fence,
         CancellationToken cancellationToken)
     {
+        using var activity = AgentForgeTelemetry.Start("agent.workflow.plan", checkpoint.WorkflowId, "supervisor", AgentRole.Supervisor.ToString());
         var planTimer = Stopwatch.StartNew();
         var plan = await planner.CreatePlanAsync(checkpoint.Objective, cancellationToken);
         planTimer.Stop();
@@ -679,7 +682,11 @@ public sealed class MultiAgentWorkflowManager(
         CancellationToken cancellationToken)
     {
         validator.Validate(checkpoint);
+        var checkpointTimer = Stopwatch.StartNew();
         var result = await store.TryUpdateAsync(checkpoint, expectedVersion, cancellationToken);
+        checkpointTimer.Stop();
+        AgentForgeTelemetry.CheckpointLatency.Record(checkpointTimer.Elapsed.TotalMilliseconds,
+            new KeyValuePair<string, object?>("agentforge.workflow.status", checkpoint.Status.ToString()));
         if (!result.Succeeded || result.Checkpoint is null)
             throw new AgentOperationException(AgentFailureKind.Conflict, "The workflow checkpoint was updated by another executor.");
         logger.LogInformation(
@@ -739,6 +746,7 @@ public sealed class MultiAgentWorkflowManager(
         var tasks = checkpoint.Tasks.Select(task => new WorkflowTaskView(
             task.TaskId,
             task.Role,
+            task.DependsOn,
             task.Status,
             task.AttemptCount,
             task.StartedAt,

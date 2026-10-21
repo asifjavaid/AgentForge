@@ -1,0 +1,12 @@
+{
+  "baselineId": "assessment-08-live-m1",
+  "source": "Assessment 08 single live workflow on 2026-10-18",
+  "objective": "Analyze password reset requirements and repository implementation, propose architecture improvements, identify security risks, and produce a technical report.",
+  "modelCalls": 19,
+  "toolCalls": 9,
+  "totalTokens": 83571,
+  "durationMilliseconds": 789743,
+  "revisions": 2,
+  "status": "InsufficientEvidence",
+  "singleObservation": true
+}

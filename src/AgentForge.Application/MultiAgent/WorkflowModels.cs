@@ -101,7 +101,12 @@ public sealed record AgentTaskMetrics(
     int? OutputTokens,
     int? TotalTokens,
     long DurationMilliseconds,
-    IReadOnlyList<string> ToolsUsed);
+    IReadOnlyList<string> ToolsUsed,
+    int ReusedToolCalls = 0,
+    int? ContextCharacters = null,
+    int? OriginalContextCharacters = null,
+    long ModelLatencyMilliseconds = 0,
+    long ToolLatencyMilliseconds = 0);
 
 public sealed record AgentTaskExecutionResult(
     AgentTaskOutput Output,
@@ -208,6 +213,7 @@ public sealed record AgentExecutionContext(
 public sealed record WorkflowTaskView(
     string TaskId,
     AgentRole Role,
+    IReadOnlyList<string> DependsOn,
     WorkflowTaskStatus Status,
     int AttemptCount,
     DateTimeOffset? StartedAt,
